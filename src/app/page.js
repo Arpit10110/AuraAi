@@ -1,4 +1,4 @@
-'use client'
+'use client';
 import { useState, useEffect } from "react";
 import ReactDOMServer from "react-dom/server";
 import Navbar from "@/Components/Navbar";
@@ -9,20 +9,44 @@ import PersonIcon from '@mui/icons-material/Person';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Image from "next/image";
 import "./globals.css";
-import Shockwave from "@/assets/Shockwave.jpeg"
+import Shockwave from "@/assets/Shockwave.jpeg";
+
 const Page = () => {
   const [UserInput, SetUserInput] = useState("");
+  const [selectedImage, setSelectedImage] = useState(null); // State to hold the selected image
   const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_API_KEY);
   const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-  //only prompt message
+  // Function to handle image selection
+  const handleImageChange = (event) => {
+    if (event.target.files && event.target.files[0]) {
+      setSelectedImage(event.target.files[0]);
+      console.log(selectedImage)
+    }
+  };
+
+  // Function to process prompts with or without images
   const propmtresult = async (prompt) => {
     try {
       const loadingSpan = document.getElementById("loading-span");
       SetUserInput(""); // Clear input field after user message is sent
-      const result = await model.generateContent(prompt);
+
+      let result;
+      if (selectedImage) {
+        const imageData = await convertImageToBase64(selectedImage);
+        const image = {
+          inlineData: {
+            data: imageData,
+            mimeType: selectedImage.type,
+          },
+        };
+        result = await model.generateContent([prompt, image]); // Send both prompt and image
+      } else {
+        result = await model.generateContent(prompt); // Only send prompt
+      }
+
       const response = await result.response;
-      const text = await response.text(); 
+      const text = await response.text();
       console.log(text);
       loadingSpan.remove(); // Remove loading span after response
       InsertAiMessage(text); // Call function to insert AI message
@@ -31,36 +55,42 @@ const Page = () => {
     }
   };
 
+  // Function to convert the image file to base64
+  const convertImageToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onloadend = () => resolve(reader.result.split(",")[1]); // Return base64 string without prefix
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   const InsertAiMessage = (Result) => {
     const chatContainer = document.querySelector(".allchat");
     const h2 = document.createElement('h2');
     h2.className = "text-[2rem] font-semibold flex gap-[0.5rem] items-baseline";
-  
+
     const autoAwesomeIconString = ReactDOMServer.renderToString(<AutoAwesomeIcon className="text-purple-400 !text-[2rem] cursor-pointer" />);
     const autoAwesomeIcon = document.createElement('span');
     autoAwesomeIcon.innerHTML = autoAwesomeIconString;
     h2.appendChild(autoAwesomeIcon);
-  
-    // Create a preformatted element for AI response to preserve formatting
+
     const pre = document.createElement('pre');
-    pre.className = "font-normal  whitespace-pre-wrap break-all"; // Apply necessary styles for better visibility
-  
-    // Typing animation - type the AI result one letter at a time
+    pre.className = "font-normal whitespace-pre-wrap break-all";
+
     let i = 0;
     const typingAnimation = () => {
       if (i < Result.length) {
-        pre.innerHTML += Result.charAt(i); // Append one character at a time to the pre element
+        pre.innerHTML += Result.charAt(i);
         i++;
-        setTimeout(typingAnimation, 50); // Delay between characters (50ms)
+        setTimeout(typingAnimation, 50);
       }
     };
-  
-    h2.appendChild(pre); // Append the preformatted response to the h2
-    chatContainer.appendChild(h2); // Append the h2 (which now contains the preformatted response) to the chat container
-  
-    typingAnimation(); // Start typing animation
+
+    h2.appendChild(pre);
+    chatContainer.appendChild(h2);
+    typingAnimation();
   };
-  
 
   const InsertUserMessage = () => {
     if (UserInput.trim() === "") {
@@ -68,14 +98,12 @@ const Page = () => {
     } else {
       const chatContainer = document.querySelector(".allchat");
 
-      // Create h2 for the user's message
       const h2 = document.createElement('h2');
       const span = document.createElement('span');
       span.id = "loading-span";
       span.className = "!w-[5rem] text-blue-400 loading loading-dots loading-lg";
       h2.className = "text-[2rem] font-semibold text-gray-400 flex gap-[0.5rem] items-baseline";
 
-      // Render the PersonIcon into a string and append to h2
       const personIconString = ReactDOMServer.renderToString(<PersonIcon className="!text-[2rem] cursor-pointer" />);
       const personIcon = document.createElement('span');
       personIcon.innerHTML = personIconString;
@@ -83,7 +111,7 @@ const Page = () => {
       h2.appendChild(personIcon);
       h2.appendChild(document.createTextNode(UserInput));
       chatContainer.appendChild(h2);
-      chatContainer.appendChild(span); // Append loading span
+      chatContainer.appendChild(span);
 
       // Call AI API to get response
       propmtresult(UserInput);
@@ -98,7 +126,7 @@ const Page = () => {
   };
 
   function scrollToBottom() {
-    const messageArea =document.querySelector(".allchat");
+    const messageArea = document.querySelector(".allchat");
     messageArea.scrollTop = messageArea.scrollHeight;
   }
 
@@ -118,7 +146,7 @@ const Page = () => {
           <input
             value={UserInput}
             onChange={(e) => SetUserInput(e.target.value)}
-            onKeyPress={handleKeyPress} // Handles Enter key
+            onKeyPress={handleKeyPress}
             className="w-[80%] text-gray-200 bg-transparent border-b-[2px] focus:outline-none text-[1.5rem]"
             type="text"
             placeholder="Enter the prompt"
@@ -127,10 +155,16 @@ const Page = () => {
             onClick={InsertUserMessage} 
             className="!text-[2.5rem] rotate-[330deg] cursor-pointer" 
           />
-          <CameraAltIcon className="!text-[2.5rem] cursor-pointer" />
+           <input
+            type="file"
+            accept="image/*"
+            onChange={handleImageChange} // Handle image upload
+            className=" "
+            id="imageInput"
+          />
         </div>
       </div>
-      <Image src={Shockwave} alt="Shockwave" className="absolute top-0 h-[100vh] z-[-5] opacity-[80%] "  />
+      <Image src={Shockwave} alt="Shockwave" className="absolute top-0 h-[100vh] z-[-5] opacity-[80%]" />
     </div>
   );
 };
